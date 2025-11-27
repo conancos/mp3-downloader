@@ -1,0 +1,181 @@
+<!-- templates/index.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Descargador de MP3</title>
+    <link rel="stylesheet" href="../static/styles.css">
+    <link rel="icon" type="image/svg+xml" href="../static/favicon.svg">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1>Descargador de MP3</h1>
+        <p>Introduce la URL de un video para descargar su audio en alta calidad (MP3).</p>
+        
+        <form id="download-form">
+            <input 
+                type="url" 
+                id="url-input" 
+                placeholder="https://www.youtube.com/watch?v=..." 
+                required
+            >
+            <button type="submit" id="download-btn">
+                <span id="btn-text">Descargar MP3</span>
+                <div id="spinner" class="spinner hidden"></div>
+            </button>
+        </form>
+
+        <!-- Nuevo contenedor para la información del video -->
+        <div id="video-info" class="video-info-container hidden">
+            <img id="video-thumbnail" src="" alt="Miniatura del video">
+            <div class="video-details">
+                <h3 id="video-title">Título del video</h3>
+            </div>
+        </div>
+
+        <div id="status-message"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('download-form');
+        const urlInput = document.getElementById('url-input');
+        const downloadBtn = document.getElementById('download-btn');
+        const btnText = document.getElementById('btn-text');
+        const spinner = document.getElementById('spinner');
+        const statusMessage = document.getElementById('status-message');
+        
+        // Nuevos elementos para la info del video
+        const videoInfoContainer = document.getElementById('video-info');
+        const videoThumbnail = document.getElementById('video-thumbnail');
+        const videoTitle = document.getElementById('video-title');
+
+        let currentVideoTitle = 'audio'; // Título por defecto
+
+        // --- LÓGICA PARA OBTENER INFORMACIÓN ---
+        let debounceTimer;
+        urlInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const url = urlInput.value.trim();
+
+            if (url === '') {
+                hideVideoInfo();
+                return;
+            }
+
+            // Pequeña pausa para no enviar peticiones con cada letra que se escribe
+            debounceTimer = setTimeout(() => {
+                fetchVideoInfo(url);
+            }, 500);
+        });
+
+        async function fetchVideoInfo(url) {
+            hideVideoInfo(); // Ocultamos la info anterior mientras cargamos
+            
+            try {
+                const response = await fetch('/get_info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url }),
+                });
+
+                if (!response.ok) {
+                    throw new Error('No se pudo obtener la información del video.');
+                }
+
+                const data = await response.json();
+                showVideoInfo(data.title, data.thumbnail);
+                currentVideoTitle = data.title; // Guardamos el título para la descarga
+
+            } catch (error) {
+                console.error('Error al obtener info:', error);
+                // No mostramos un error grande al usuario, solo ocultamos la info
+                hideVideoInfo();
+            }
+        }
+        
+        function showVideoInfo(title, thumbnailUrl) {
+            videoTitle.textContent = title;
+            videoThumbnail.src = thumbnailUrl;
+            videoInfoContainer.classList.remove('hidden');
+        }
+
+        function hideVideoInfo() {
+            videoInfoContainer.classList.add('hidden');
+            videoThumbnail.src = '';
+            currentVideoTitle = 'audio';
+        }
+
+        // --- LÓGICA DE DESCARGA ---
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const videoUrl = urlInput.value.trim();
+            if (!videoUrl) {
+                showMessage('Por favor, introduce una URL válida.', 'error');
+                return;
+            }
+
+            setLoadingState(true);
+            clearMessage();
+
+            try {
+                const response = await fetch('/download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        url: videoUrl, 
+                        title: currentVideoTitle // Enviamos el título que guardamos
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Error en la descarga.');
+                }
+
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+                a.download = `${currentVideoTitle}.mp3`; // Usamos el título aquí también
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(downloadUrl);
+                document.body.removeChild(a);
+                
+                showMessage('¡Descarga completada!', 'success');
+
+            } catch (error) {
+                showMessage(error.message, 'error');
+            } finally {
+                setLoadingState(false);
+            }
+        });
+
+        function setLoadingState(isLoading) {
+            downloadBtn.disabled = isLoading;
+            if (isLoading) {
+                btnText.textContent = 'Procesando...';
+                spinner.classList.remove('hidden');
+            } else {
+                btnText.textContent = 'Descargar MP3';
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function showMessage(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type}`;
+        }
+
+        function clearMessage() {
+            statusMessage.textContent = '';
+            statusMessage.className = 'status-message';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+/mp3-downloader
+├── app.py              # Nuestro servidor Flask
+├── requirements.txt    # Las dependencias de Python
+├── static/
+│   └── style.css       # Nuestros estilos CSS
+└── templates/
+    └── index.html      # La página web que verá el usuario
