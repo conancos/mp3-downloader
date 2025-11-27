@@ -110,6 +110,7 @@ ENV/
 env.bak/
 venv.bak/
 NOTAS.local.txt
+run_app.bat
 
 # Spyder project settings
 .spyderproject
